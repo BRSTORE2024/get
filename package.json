@@ -1,0 +1,41 @@
+{
+  "name": "link-botttt",
+  "version": "2.0.0",
+  "description": "Bot otomatis",
+  "main": "DARIHTML.js",
+  "scripts": {
+    "start": "Sheerid_link_grabber.js",
+    "dev": "node --trace-warnings Sheerid_link_grabber.js"
+  },
+  "keywords": [
+    "puppeteer",
+    "bot",
+    "telegram",
+    "pdf",
+    "automation",
+    "youtube-student"
+  ],
+  "author": "Sindu Sindadi",
+  "license": "MIT",
+  "dependencies": {
+    "@faker-js/faker": "^9.9.0",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "axios": "^1.13.2",
+    "canvas": "^3.2.0",
+    "form-data": "^4.0.5",
+    "openvpn": "^0.1.5",
+    "pdf-lib": "^1.17.1",
+    "puppeteer": "^24.33.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-adblocker": "^2.13.6",
+    "puppeteer-extra-plugin-recaptcha": "^3.6.8",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "request-promise": "^4.2.6"
+  },
+  "optionalDependencies": {
+    "fontkit": "^2.0.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
