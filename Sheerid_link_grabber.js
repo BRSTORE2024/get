@@ -10,8 +10,8 @@ puppeteer.use(StealthPlugin());
 
 const IS_HEADLESS = process.argv.includes('--headless');
 
-const TELEGRAM_TOKEN = 'ISI_TOKEN_BOT';
-const TELEGRAM_CHAT_ID = 'ISI_CHAT_ID';
+const TELEGRAM_TOKEN = '8796052869:AAFAiyxqIZGdCXY2b3zCe4cTVCLmxE6qcBg';
+const TELEGRAM_CHAT_ID = '7676651391';
 
 const LINK_FILE = path.join(__dirname, 'link.txt');
 
