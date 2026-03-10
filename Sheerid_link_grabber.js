@@ -10,34 +10,34 @@ puppeteer.use(StealthPlugin());
 
 const IS_HEADLESS = process.argv.includes('--headless');
 
-const TELEGRAM_TOKEN = '8796052869:AAFAiyxqIZGdCXY2b3zCe4cTVCLmxE6qcBg';
-const TELEGRAM_CHAT_ID = '7676651391';
+const TELEGRAM_TOKEN = "ISI_TOKEN";
+const TELEGRAM_CHAT_ID = "ISI_CHAT_ID";
 
-const LINK_FILE = path.join(__dirname, 'link.txt');
+const LINK_FILE = path.join(__dirname, "link.txt");
 
 let TELEGRAM_MODE = false;
-let TELEGRAM_THREAD = 0;
+let TELEGRAM_THREAD = 5;
 let lastUpdateId = 0;
 
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const delay = ms => new Promise(r => setTimeout(r, ms));
 
 /* =========================
    TELEGRAM SEND
 ========================= */
 
-const kirimTelegram = async (pesan) => {
+const kirimTelegram = async (text) => {
 
   try {
 
     await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
       chat_id: TELEGRAM_CHAT_ID,
-      text: pesan,
-      parse_mode: 'Markdown'
+      text,
+      parse_mode: "Markdown"
     });
 
   } catch (err) {
 
-    console.log('Telegram error:', err.message);
+    console.log("Telegram error:", err.message);
 
   }
 
@@ -45,137 +45,110 @@ const kirimTelegram = async (pesan) => {
 
 const kirimFileTelegram = async (filePath) => {
 
-  try {
+  if (!fs.existsSync(filePath)) return;
 
-    if (!fs.existsSync(filePath)) return;
+  const form = new FormData();
 
-    const formData = new FormData();
+  form.append("chat_id", TELEGRAM_CHAT_ID);
+  form.append("document", fs.createReadStream(filePath));
 
-    formData.append('chat_id', TELEGRAM_CHAT_ID);
-    formData.append('document', fs.createReadStream(filePath));
-
-    await axios.post(
-      `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`,
-      formData,
-      { headers: formData.getHeaders() }
-    );
-
-  } catch (err) {
-
-    console.log('Telegram file error:', err.message);
-
-  }
+  await axios.post(
+    `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`,
+    form,
+    { headers: form.getHeaders() }
+  );
 
 };
 
 /* =========================
-   TELEGRAM LISTENER
+   TELEGRAM MENU
 ========================= */
 
-const startTelegramListener = () => {
+const kirimMenu = async () => {
 
-  console.log("🤖 Telegram listener aktif");
+  await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
 
-  setInterval(async () => {
+    chat_id: TELEGRAM_CHAT_ID,
 
-    try {
+    text: "🤖 *SheerID Bot*\nUpload akun.txt lalu tekan RUN",
 
-      const res = await axios.get(
-        `https://api.telegram.org/bot${TELEGRAM_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`
-      );
+    parse_mode: "Markdown",
 
-      const updates = res.data.result;
-
-      for (const update of updates) {
-
-        lastUpdateId = update.update_id;
-
-        if (!update.message) continue;
-
-        const text = update.message.text || "";
-
-        if (text.startsWith("/run")) {
-
-          const parts = text.split(" ");
-          const thread = parseInt(parts[1]) || 3;
-
-          TELEGRAM_MODE = true;
-          TELEGRAM_THREAD = thread;
-
-          await kirimTelegram(`🚀 Bot dijalankan dengan ${thread} thread`);
-
-          runMain();
-
-        }
-
-        if (text === "/status") {
-
-          await kirimTelegram("🤖 Bot aktif dan menunggu perintah");
-
-        }
-
-        if (text === "/result") {
-
-          await kirimFileTelegram(LINK_FILE);
-
-        }
-
-      }
-
-    } catch (err) {
-
-      console.log("Telegram polling error:", err.message);
-
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "▶️ RUN", callback_data: "run" },
+          { text: "📊 STATUS", callback_data: "status" }
+        ],
+        [
+          { text: "📄 RESULT", callback_data: "result" }
+        ]
+      ]
     }
 
-  }, 3000);
+  });
 
 };
 
 /* =========================
-   SAVE LINK
+   DOWNLOAD FILE TELEGRAM
+========================= */
+
+const downloadTelegramFile = async (file_id) => {
+
+  const fileInfo = await axios.get(
+    `https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${file_id}`
+  );
+
+  const filePath = fileInfo.data.result.file_path;
+
+  const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`;
+
+  const response = await axios.get(fileUrl, { responseType: "stream" });
+
+  const writer = fs.createWriteStream("akun.txt");
+
+  response.data.pipe(writer);
+
+  return new Promise((resolve, reject) => {
+
+    writer.on("finish", resolve);
+    writer.on("error", reject);
+
+  });
+
+};
+
+/* =========================
+   SAVE SHEERID LINK
 ========================= */
 
 const saveSheerIDUrl = async (email, url) => {
 
-  try {
+  let existing = [];
 
-    let existingEntries = [];
+  if (fs.existsSync(LINK_FILE)) {
 
-    if (fs.existsSync(LINK_FILE)) {
+    existing = fs.readFileSync(LINK_FILE, "utf8").split("\n").filter(Boolean);
 
-      existingEntries = fs.readFileSync(LINK_FILE, 'utf-8')
-        .split('\n')
-        .filter(line => line.trim());
+  }
 
-    }
+  const entry = `${email}:${url}`;
 
-    const newEntry = `${email}:${url}`;
+  if (!existing.find(e => e.startsWith(email))) {
 
-    const isEmailExists = existingEntries.some(entry => entry.startsWith(`${email}:`));
+    existing.push(entry);
 
-    if (!isEmailExists) {
+    fs.writeFileSync(LINK_FILE, existing.join("\n"));
 
-      existingEntries.push(newEntry);
-
-      fs.writeFileSync(LINK_FILE, existingEntries.join('\n'));
-
-      console.log(`URL SheerID disimpan untuk ${email}`);
-
-      await kirimTelegram(`🔗 SheerID\n${email}\n${url}`);
-
-    }
-
-  } catch (err) {
-
-    console.error('Gagal menyimpan URL:', err.message);
+    await kirimTelegram(`🔗 SheerID\n${email}\n${url}`);
 
   }
 
 };
 
 /* =========================
-   THREAD INPUT
+   THREAD INPUT CLI
 ========================= */
 
 const askThreadCount = () => {
@@ -187,20 +160,11 @@ const askThreadCount = () => {
 
   return new Promise(resolve => {
 
-    rl.question('🧵 Mau pakai berapa thread (1-20)? ', answer => {
+    rl.question("Thread (1-20)? ", answer => {
 
       rl.close();
 
-      const num = parseInt(answer);
-
-      if (isNaN(num) || num < 1 || num > 20) {
-
-        console.log('Input tidak valid');
-        process.exit(1);
-
-      }
-
-      resolve(num);
+      resolve(parseInt(answer));
 
     });
 
@@ -209,86 +173,62 @@ const askThreadCount = () => {
 };
 
 /* =========================
-   DISPLAY RESULT
-========================= */
-
-const displayResults = async () => {
-
-  if (fs.existsSync(LINK_FILE)) {
-
-    const content = fs.readFileSync(LINK_FILE, 'utf-8');
-
-    const entries = content.split('\n').filter(Boolean);
-
-    await kirimFileTelegram(LINK_FILE);
-
-    return entries.length;
-
-  }
-
-  return 0;
-
-};
-
-/* =========================
    PROCESS ACCOUNT
 ========================= */
 
-const processSingleAccount = async ({ email, pass }, browserIndex, failedAccounts) => {
+const processSingleAccount = async ({ email, pass }, index, failed) => {
 
-  console.log(`🚀 Browser ${browserIndex} memproses ${email}`);
+  console.log("Processing", email);
 
   const browser = await puppeteer.launch({
+
     headless: IS_HEADLESS,
+
     args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-blink-features=AutomationControlled',
-      '--blink-settings=imagesEnabled=false'
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--blink-settings=imagesEnabled=false"
     ]
+
   });
 
   const page = await browser.newPage();
 
   try {
 
-    await page.goto('https://accounts.google.com/servicelogin?hl=id');
+    await page.goto("https://accounts.google.com/servicelogin?hl=id");
 
-    await page.type('input[type="email"]', email, { delay: 100 });
+    await page.type('input[type="email"]', email);
 
-    await page.keyboard.press('Enter');
+    await page.keyboard.press("Enter");
 
     await page.waitForSelector('input[type="password"]');
 
-    await page.type('input[type="password"]', pass, { delay: 100 });
+    await page.type('input[type="password"]', pass);
 
-    await page.keyboard.press('Enter');
+    await page.keyboard.press("Enter");
 
-    await page.waitForNavigation({ waitUntil: 'networkidle2' });
+    await page.waitForNavigation({ waitUntil: "networkidle2" });
 
-    console.log(`Login berhasil: ${email}`);
-
-    await page.goto('https://music.youtube.com/youtube_premium/student');
+    await page.goto("https://music.youtube.com/youtube_premium/student");
 
     await delay(5000);
 
-    const sheerIDUrl = page.url();
+    const url = page.url();
 
-    if (sheerIDUrl.includes('sheerid.com')) {
+    if (url.includes("sheerid")) {
 
-      await saveSheerIDUrl(email, sheerIDUrl);
+      await saveSheerIDUrl(email, url);
 
     } else {
 
-      failedAccounts.push({ email, pass });
+      failed.push({ email, pass });
 
     }
 
   } catch (err) {
 
-    console.log(`Error akun ${email}`);
-
-    failedAccounts.push({ email, pass });
+    failed.push({ email, pass });
 
   }
 
@@ -297,50 +237,50 @@ const processSingleAccount = async ({ email, pass }, browserIndex, failedAccount
 };
 
 /* =========================
-   BATCH PROCESS
+   PROCESS BATCH
 ========================= */
 
-const processAccountsInBatches = async (akunList, threadCount) => {
+const processAccountsInBatches = async (accounts, thread) => {
 
-  const failedAccounts = [];
+  const failed = [];
 
-  while (akunList.length > 0) {
+  while (accounts.length > 0) {
 
-    const currentBatch = akunList.splice(0, threadCount);
+    const batch = accounts.splice(0, thread);
 
-    const browserPromises = currentBatch.map((akun, index) => {
+    const jobs = batch.map((acc, i) => {
 
       return new Promise(resolve => {
 
         setTimeout(async () => {
 
-          await processSingleAccount(akun, index + 1, failedAccounts);
+          await processSingleAccount(acc, i + 1, failed);
 
           resolve();
 
-        }, index * 2000);
+        }, i * 2000);
 
       });
 
     });
 
-    await Promise.all(browserPromises);
+    await Promise.all(jobs);
 
   }
 
-  if (failedAccounts.length > 0) {
+  if (failed.length) {
 
-    const failed = failedAccounts.map(acc => `${acc.email} ${acc.pass}`).join('\n');
+    const txt = failed.map(a => `${a.email} ${a.pass}`).join("\n");
 
-    fs.writeFileSync('akun_gagal.txt', failed);
+    fs.writeFileSync("akun_gagal.txt", txt);
 
-    await kirimFileTelegram('akun_gagal.txt');
+    await kirimFileTelegram("akun_gagal.txt");
 
   }
 
-  const totalLinks = await displayResults();
+  await kirimFileTelegram(LINK_FILE);
 
-  await kirimTelegram(`📊 Selesai\nTotal URL: ${totalLinks}`);
+  await kirimTelegram("✅ Selesai");
 
 };
 
@@ -350,57 +290,140 @@ const processAccountsInBatches = async (akunList, threadCount) => {
 
 const runMain = async () => {
 
-  if (!fs.existsSync(LINK_FILE)) {
-    fs.writeFileSync(LINK_FILE, '');
-  }
+  if (!fs.existsSync("akun.txt")) {
 
-  const akunList = fs.readFileSync('akun.txt', 'utf-8')
-    .split('\n')
-    .filter(Boolean)
-    .map(line => {
-
-      const [email, pass] = line.trim().split(' ');
-
-      return { email, pass };
-
-    });
-
-  if (akunList.length === 0) {
-
-    console.log('Tidak ada akun');
-
-    await kirimTelegram('akun.txt kosong');
+    await kirimTelegram("⚠️ akun.txt belum ada");
 
     return;
 
   }
 
-  console.log(`Total akun: ${akunList.length}`);
+  const accounts = fs.readFileSync("akun.txt","utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map(v => {
 
-  let threadCount;
+      const [email, pass] = v.split(" ");
+
+      return { email, pass };
+
+    });
+
+  let thread;
 
   if (TELEGRAM_MODE) {
-    threadCount = TELEGRAM_THREAD;
+
+    thread = TELEGRAM_THREAD;
+
   } else {
-    threadCount = await askThreadCount();
+
+    thread = await askThreadCount();
+
   }
 
-  await processAccountsInBatches(akunList, threadCount);
+  await processAccountsInBatches(accounts, thread);
 
 };
 
 /* =========================
-   START MODE
+   TELEGRAM LISTENER
+========================= */
+
+const startTelegram = () => {
+
+  console.log("Telegram listener aktif");
+
+  kirimMenu();
+
+  setInterval(async () => {
+
+    try {
+
+      const res = await axios.get(
+        `https://api.telegram.org/bot${TELEGRAM_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`
+      );
+
+      for (const update of res.data.result) {
+
+        lastUpdateId = update.update_id;
+
+        /* upload akun.txt */
+
+        if (update.message && update.message.document) {
+
+          const doc = update.message.document;
+
+          if (doc.file_name === "akun.txt") {
+
+            await kirimTelegram("📥 menerima akun.txt...");
+
+            await downloadTelegramFile(doc.file_id);
+
+            await kirimTelegram("✅ akun.txt disimpan");
+
+            await kirimMenu();
+
+          }
+
+        }
+
+        /* tombol */
+
+        if (update.callback_query) {
+
+          const data = update.callback_query.data;
+
+          if (data === "run") {
+
+            TELEGRAM_MODE = true;
+
+            await kirimTelegram("🚀 Memulai bot...");
+
+            runMain();
+
+          }
+
+          if (data === "status") {
+
+            await kirimTelegram("🤖 Bot aktif");
+
+          }
+
+          if (data === "result") {
+
+            await kirimFileTelegram(LINK_FILE);
+
+          }
+
+          await axios.post(
+            `https://api.telegram.org/bot${TELEGRAM_TOKEN}/answerCallbackQuery`,
+            { callback_query_id: update.callback_query.id }
+          );
+
+        }
+
+      }
+
+    } catch (err) {
+
+      console.log("Polling error:", err.message);
+
+    }
+
+  }, 3000);
+
+};
+
+/* =========================
+   START
 ========================= */
 
 if (process.argv.includes("--telegram")) {
 
-  console.log("Mode Telegram aktif");
-
-  startTelegramListener();
+  startTelegram();
 
 } else {
 
   runMain();
 
-                }
+}
